@@ -219,6 +219,7 @@ button:disabled{opacity:.4;cursor:default}
 /* Nächster Schritt: genau ein Knopf leuchtet (Akzent + sanftes Pulsieren), alles andere bleibt zurückhaltend */
 .next{background:var(--next-bg)!important;border-color:var(--next-bg)!important;color:var(--next-text)!important;font-weight:600!important;animation:winken 2.4s ease-out infinite}
 @keyframes winken{0%{box-shadow:0 0 0 0 var(--next-glow)}70%{box-shadow:0 0 0 10px rgba(0,0,0,0)}100%{box-shadow:0 0 0 0 rgba(0,0,0,0)}}
+#bSichern.laedt{background-image:linear-gradient(90deg,var(--fuellung) var(--p,0%),transparent var(--p,0%));cursor:progress;opacity:1!important}   /* Abzug trocknet noch: Balken lädt bis „save print“ geht */
 #bBelichten.laeuft{background-image:linear-gradient(90deg,var(--fuellung) var(--p,0%),transparent var(--p,0%));cursor:pointer}   /* „exposing“ füllt sich wie ein Balken bis zur vollen Belichtung */
 .zweit{border-color:var(--zweit-rand)!important;color:var(--tinte)!important;font-weight:600!important}   /* echte Alternative zum leuchtenden Knopf, z. B. „new sheet“ neben „save print“ */
 .fehler{margin:0 0 14px;font-size:13px;color:var(--fehler)}
@@ -583,8 +584,10 @@ function setState(s) {
   fehler('');
   if (s === 'exposing') { show(['bBelichten']); next(null); $('bBelichten').style.setProperty('--p', '0%'); }
   if (s === 'exposed') { show(['bWaessern']); next('bWaessern'); }
-  if (s === 'washing') { show([]); next(null); }
-  if (s === 'done') { show(['bSichern', 'bNeu']); next(null); }   // „save print“ leuchtet, sobald der Abzug fertig ist
+  const laedt = s === 'washing' || s === 'done';
+  $('bSichern').classList.toggle('laedt', laedt); $('bSichern').disabled = laedt;   // wird frei, sobald der Abzug fertig ist
+  if (s === 'washing') { show(['bSichern']); next(null); $('bSichern').style.setProperty('--p', '0%'); }
+  if (s === 'done') { show(['bSichern', 'bNeu']); next(null); }   // „save print“ lädt noch, leuchtet sobald der Abzug fertig ist
   updateClock();
 }
 function readyHint() {
@@ -656,7 +659,7 @@ function finishPrint() {
     const name = 'cyanotype-' + d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes()) + '-nr' + nr + '.png';
     prints.push({ url, name });
     hang(url, name);
-    if (state === 'done') next('bSichern');
+    if (state === 'done') { $('bSichern').classList.remove('laedt'); $('bSichern').disabled = false; next('bSichern'); }
   }, 'image/png');
 }
 function hang(url, name) {
@@ -690,6 +693,8 @@ function loop(now) {
     if (ox >= 1) finishPrint();
   }
   if (mode === 'schatten' && video.srcObject && (state === 'ready' || state === 'exposing')) updateShadow();
+  if (state === 'washing' || (state === 'done' && $('bSichern').classList.contains('laedt')))   // Ladebalken: Wässern ≈ 35 %, Trocknen ≈ 65 %
+    $('bSichern').style.setProperty('--p', (state === 'washing' ? wash * 35 : 35 + ox * 65) + '%');
   if (dirty) { render(); dirty = false; }
   requestAnimationFrame(loop);
 }
