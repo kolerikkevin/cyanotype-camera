@@ -354,9 +354,20 @@ const clamp = v => v < 0 ? 0 : v > 1 ? 1 : v;
 // ---------- Ein neues, frisch gestrichenes Blatt ----------
 // Beschichtete Fläche: exakt 4:5, mittig mit gleichem Rand. Genau dieser Ausschnitt wird der Abzug.
 const FL = Math.round(W * .08), FW = W - 2 * FL, FH = Math.round(FW * 5 / 4), FT = Math.round((H - FH) / 2);
+// Frisches Blatt: Zufallswert merken, Papierkorn und Wasserkante würfeln, dann anstreichen
+let blattSeed = 0;
 function newSheet() {
-  const s = (Math.random() * 1e6) | 0, f = W / 480;
+  const s = blattSeed = (Math.random() * 1e6) | 0, f = W / 480;
   for (let x = 0; x < W; x++) frontNoise[x] = fbm(x / 90 / f, 1.7, s + 5) - .5;
+  for (let y = 0, i = 0; y < H; y++) for (let x = 0; x < W; x++, i++)
+    grain[i] = (hash(x, y, s + 3) - .5) * .7 + (vn(x / 3, y / 10, s + 4) - .5) * .6;
+  beschichten();
+  expo.fill(0);
+  elapsed = 0; wash = 0; ox = 0; dirty = true;
+}
+// Anstrich (clean oder brushed) aus dem Zufallswert des Blatts: lässt sich jederzeit neu legen, auch nach dem Abzug
+function beschichten() {
+  const s = blattSeed, f = W / 480;
   // Pinsel: Striche laufen quer, Enden franzen mit den Borsten aus und bleiben innerhalb des Ausschnitts
   const inset = 6 * f, wob = 10 * f;
   const lRow = new Float32Array(H), rRow = new Float32Array(H), tCol = new Float32Array(W), bCol = new Float32Array(W);
@@ -387,12 +398,10 @@ function newSheet() {
         mask[i] = clamp(d + .5);   // saubere Kante, nur geglättet
         dens[i] = .9 + .1 * streak;
       }
-      grain[i] = (hash(x, y, s + 3) - .5) * .7 + (vn(x / 3, y / 10, s + 4) - .5) * .6;
     }
   }
   resid = brush ? .07 : .03;   // gestrichene Fläche bleibt leicht sichtbar
-  expo.fill(0);
-  elapsed = 0; wash = 0; ox = 0; dirty = true;
+  dirty = true;
 }
 
 // ---------- Farben ----------
@@ -650,7 +659,7 @@ function makeNoiseTile() {
   for (let i = 0; i < d.data.length; i += 4) { const v = 200 + Math.random() * 55; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; }
   x.putImageData(d, 0, 0); return c;
 }
-function finishPrint() {
+function finishPrint(ersetzen) {
   // Abzug = nur die beschichtete 4:5-Fläche, ohne Papierrand und Scan-Kante, in Instagram-Größe
   const c = document.createElement('canvas'); c.width = 1080; c.height = 1350;
   const x = c.getContext('2d'), k = blatt.width / W;
@@ -661,24 +670,31 @@ function finishPrint() {
   x.fillStyle = x.createPattern(noiseTile, 'repeat'); x.fillRect(0, 0, c.width, c.height);
   c.toBlob(blob => {
     const url = URL.createObjectURL(blob);
-    const d = new Date(), p = n => String(n).padStart(2, '0');
-    const name = 'cyanotype-' + d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes()) + '-nr' + nr + '.png';
-    prints.push({ url, name });
-    hang(url, name);
-    if (state === 'done') { $('bSichern').classList.remove('laedt'); $('bSichern').disabled = false; $('bSichern').textContent = 'save print'; next('bSichern'); }
+    if (ersetzen && prints.length) {   // Anstrich nachträglich umgestellt: letzten Abzug austauschen
+      const alt = prints[prints.length - 1]; URL.revokeObjectURL(alt.url);
+      alt.name = alt.name.replace(/(-brushed)?\.png$/, (brush ? '-brushed' : '') + '.png');   // beide Varianten getrennt sicherbar alt.url = url; alt.el.querySelector('img').src = url;
+    } else {
+      const d = new Date(), p = n => String(n).padStart(2, '0');
+      const name = 'cyanotype-' + d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes()) + '-nr' + nr + (brush ? '-brushed' : '') + '.png';
+      const print = { url, name };
+      prints.push(print);
+      print.el = hang(print);
+    }
+    if (state === 'done') { $('bSichern').classList.remove('laedt'); $('bSichern').disabled = false; $('bSichern').textContent = 'save print'; $('bSichern').hidden = false; next('bSichern'); }
   }, 'image/png');
 }
-function hang(url, name) {
+function hang(print) {
   const b = document.createElement('button');
   b.className = 'abzug';
-  b.title = 'download: ' + name;
+  b.title = 'download: ' + print.name;
   const r = (Math.random() * 6 - 3).toFixed(2) + 'deg';
   b.style.setProperty('--r', r); b.style.setProperty('--r0', (parseFloat(r) * 4) + 'deg');
   b.style.transform = 'rotate(' + r + ')';
-  const im = new Image(); im.src = url; im.alt = name;
+  const im = new Image(); im.src = print.url; im.alt = print.name;
   b.append(im);
-  b.onclick = () => { download(url, name); if (state === 'done' && url === prints[prints.length - 1].url) { $('bSichern').hidden = true; next('bNeu'); } };
+  b.onclick = () => { download(print.url, print.name); if (state === 'done' && print === prints[prints.length - 1]) { $('bSichern').hidden = true; next('bNeu'); } };
   $('leine').append(b);
+  return b;
 }
 function download(url, name) { const a = document.createElement('a'); a.href = url; a.download = name; a.click(); }
 
@@ -730,7 +746,8 @@ function segment(id, attr, cb) {
 }
 segment('strich', 'b', v => {
   brush = v === 'brush';
-  if (state === 'idle' || state === 'ready') newSheet();
+  beschichten();   // geht jederzeit: die Belichtung bleibt, nur der Anstrich wird neu gelegt
+  if (state === 'done' && prints.length && !$('bSichern').classList.contains('laedt')) { render(); dirty = false; finishPrint(true); }   // fertigen Abzug austauschen
 });
 function modusZeigen() {
   const sch = mode === 'schatten';
