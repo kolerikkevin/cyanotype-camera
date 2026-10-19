@@ -154,6 +154,7 @@ button:disabled{opacity:.4;cursor:default}
   transform-origin:50% -18px;
   animation:pendeln 2.4s ease-out 1;
 }
+.abzug.aktiv img{outline:2px solid var(--link);outline-offset:3px}   /* dieser Abzug liegt gerade auf dem Blatt */
 .abzug img{display:block;width:120px;box-shadow:0 8px 14px -8px var(--schatten)}
 .abzug::before{
   content:'';position:absolute;left:50%;top:-24px;width:9px;height:30px;margin-left:-4.5px;
@@ -321,6 +322,7 @@ let elapsed = 0, wash = 0, ox = 0, dirty = true, nr = 0;
 let brush = false;          // Unterlage mit Pinselstrichen
 let resid = .03;           // Resttönung der Beschichtung nach dem Wässern
 const prints = [];
+let aktiv = null;   // der Abzug, der gerade auf dem Blatt liegt (frisch oder von der Leine zurückgeholt)
 
 // Blatt-Felder
 const mask = new Float32Array(N), dens = new Float32Array(N), grain = new Float32Array(N), expo = new Float32Array(N);
@@ -357,13 +359,18 @@ const FL = Math.round(W * .08), FW = W - 2 * FL, FH = Math.round(FW * 5 / 4), FT
 // Frisches Blatt: Zufallswert merken, Papierkorn und Wasserkante würfeln, dann anstreichen
 let blattSeed = 0;
 function newSheet() {
-  const s = blattSeed = (Math.random() * 1e6) | 0, f = W / 480;
-  for (let x = 0; x < W; x++) frontNoise[x] = fbm(x / 90 / f, 1.7, s + 5) - .5;
-  for (let y = 0, i = 0; y < H; y++) for (let x = 0; x < W; x++, i++)
-    grain[i] = (hash(x, y, s + 3) - .5) * .7 + (vn(x / 3, y / 10, s + 4) - .5) * .6;
+  blattAus((Math.random() * 1e6) | 0);
   beschichten();
   expo.fill(0);
   elapsed = 0; wash = 0; ox = 0; dirty = true;
+  setAktiv(null);
+}
+// Papierkorn und Wasserkante aus dem Zufallswert eines Blatts
+function blattAus(seed) {
+  const s = blattSeed = seed, f = W / 480;
+  for (let x = 0; x < W; x++) frontNoise[x] = fbm(x / 90 / f, 1.7, s + 5) - .5;
+  for (let y = 0, i = 0; y < H; y++) for (let x = 0; x < W; x++, i++)
+    grain[i] = (hash(x, y, s + 3) - .5) * .7 + (vn(x / 3, y / 10, s + 4) - .5) * .6;
 }
 // Anstrich (clean oder brushed) aus dem Zufallswert des Blatts: lässt sich jederzeit neu legen, auch nach dem Abzug
 function beschichten() {
@@ -659,6 +666,25 @@ function makeNoiseTile() {
   for (let i = 0; i < d.data.length; i += 4) { const v = 200 + Math.random() * 55; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; }
   x.putImageData(d, 0, 0); return c;
 }
+// Abzug von der Leine zurück aufs Blatt: Belichtung und Anstrich wiederherstellen, dann lässt sich clean/brushed umstellen und neu sichern
+function vomLeine(print) {
+  if (!['idle', 'ready', 'done'].includes(state) || $('bSichern').classList.contains('laedt')) return;   // nicht mitten im Belichten/Waschen/Trocknen
+  blattAus(print.seed);
+  brush = print.brush;
+  for (const x of $('strich').children) x.setAttribute('aria-pressed', (x.dataset.b === 'brush') === brush);
+  beschichten();
+  expo.set(print.expo);
+  wash = 1; ox = 1; elapsed = 0;
+  setAktiv(print);
+  setState('done');
+  const b = $('bSichern'); b.classList.remove('laedt'); b.disabled = false; b.textContent = 'save print'; b.hidden = false; next('bSichern');
+  dirty = true;
+  window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
+}
+function setAktiv(print) {
+  aktiv = print;
+  for (const p of prints) p.el?.classList.toggle('aktiv', p === print);
+}
 function finishPrint(ersetzen) {
   // Abzug = nur die beschichtete 4:5-Fläche, ohne Papierrand und Scan-Kante, in Instagram-Größe
   const c = document.createElement('canvas'); c.width = 1080; c.height = 1350;
@@ -670,15 +696,17 @@ function finishPrint(ersetzen) {
   x.fillStyle = x.createPattern(noiseTile, 'repeat'); x.fillRect(0, 0, c.width, c.height);
   c.toBlob(blob => {
     const url = URL.createObjectURL(blob);
-    if (ersetzen && prints.length) {   // Anstrich nachträglich umgestellt: letzten Abzug austauschen
-      const alt = prints[prints.length - 1]; URL.revokeObjectURL(alt.url);
-      alt.name = alt.name.replace(/(-brushed)?\.png$/, (brush ? '-brushed' : '') + '.png');   // beide Varianten getrennt sicherbar alt.url = url; alt.el.querySelector('img').src = url;
+    if (ersetzen && aktiv) {   // Anstrich nachträglich umgestellt: den Abzug auf dem Blatt austauschen
+      URL.revokeObjectURL(aktiv.url);
+      aktiv.url = url; aktiv.brush = brush; aktiv.el.querySelector('img').src = url;
+      aktiv.name = aktiv.name.replace(/(-brushed)?\.png$/, (brush ? '-brushed' : '') + '.png');   // beide Varianten getrennt sicherbar
     } else {
       const d = new Date(), p = n => String(n).padStart(2, '0');
       const name = 'cyanotype-' + d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes()) + '-nr' + nr + (brush ? '-brushed' : '') + '.png';
-      const print = { url, name };
+      const print = { url, name, seed: blattSeed, brush, expo: expo.slice() };   // Belichtung merken: später von der Leine zurückholbar
       prints.push(print);
       print.el = hang(print);
+      setAktiv(print);
     }
     if (state === 'done') { $('bSichern').classList.remove('laedt'); $('bSichern').disabled = false; $('bSichern').textContent = 'save print'; $('bSichern').hidden = false; next('bSichern'); }
   }, 'image/png');
@@ -692,7 +720,7 @@ function hang(print) {
   b.style.transform = 'rotate(' + r + ')';
   const im = new Image(); im.src = print.url; im.alt = print.name;
   b.append(im);
-  b.onclick = () => { download(print.url, print.name); if (state === 'done' && print === prints[prints.length - 1]) { $('bSichern').hidden = true; next('bNeu'); } };
+  b.onclick = () => vomLeine(print);
   $('leine').append(b);
   return b;
 }
@@ -733,7 +761,7 @@ $('bLeer').onclick = () => {
   ref = Uint8ClampedArray.from(cover(video, video.videoWidth, video.videoHeight));
   readyHint();
 };
-$('bSichern').onclick = () => { const p = prints[prints.length - 1]; if (p) { download(p.url, p.name); $('bSichern').hidden = true; next('bNeu'); } };   // gesichert: „save print“ verschwindet
+$('bSichern').onclick = () => { const p = aktiv; if (p) { download(p.url, p.name); $('bSichern').hidden = true; next('bNeu'); } };   // gesichert: „save print“ verschwindet
 $('bNeu').onclick = () => { if (state === 'done' && ox < 1) finishPrint(); newSheet(); setState(video.srcObject ? 'ready' : 'idle'); };
 
 function segment(id, attr, cb) {
@@ -747,7 +775,7 @@ function segment(id, attr, cb) {
 segment('strich', 'b', v => {
   brush = v === 'brush';
   beschichten();   // geht jederzeit: die Belichtung bleibt, nur der Anstrich wird neu gelegt
-  if (state === 'done' && prints.length && !$('bSichern').classList.contains('laedt')) { render(); dirty = false; finishPrint(true); }   // fertigen Abzug austauschen
+  if (state === 'done' && aktiv && !$('bSichern').classList.contains('laedt')) { render(); dirty = false; finishPrint(true); }   // fertigen Abzug austauschen
 });
 function modusZeigen() {
   const sch = mode === 'schatten';
