@@ -589,7 +589,8 @@ function setState(s) {
   if (s === 'exposing') { show(['bBelichten']); next(null); $('bBelichten').style.setProperty('--p', '0%'); }
   if (s === 'exposed') { show(['bWaessern']); next('bWaessern'); }
   const laedt = s === 'done';   // nach dem Waschen trocknet der Abzug noch: „save print“ lädt
-  $('bSichern').classList.toggle('laedt', laedt); $('bSichern').disabled = laedt;   // wird frei, sobald der Abzug fertig ist
+  $('bSichern').classList.toggle('laedt', laedt); $('bSichern').disabled = laedt;
+  $('bSichern').textContent = laedt ? 'drying' : 'save print';   // erst trocknen, dann sichern   // wird frei, sobald der Abzug fertig ist
   if (s === 'washing') { show(['bWaessern']); next(null); $('bWaessern').style.setProperty('--p', '0%'); }
   if (s === 'done') $('bSichern').style.setProperty('--p', '0%');
   if (s === 'done') { show(['bSichern', 'bNeu']); next(null); }   // „save print“ lädt noch, leuchtet sobald der Abzug fertig ist
@@ -664,7 +665,7 @@ function finishPrint() {
     const name = 'cyanotype-' + d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes()) + '-nr' + nr + '.png';
     prints.push({ url, name });
     hang(url, name);
-    if (state === 'done') { $('bSichern').classList.remove('laedt'); $('bSichern').disabled = false; next('bSichern'); }
+    if (state === 'done') { $('bSichern').classList.remove('laedt'); $('bSichern').disabled = false; $('bSichern').textContent = 'save print'; next('bSichern'); }
   }, 'image/png');
 }
 function hang(url, name) {
