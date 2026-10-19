@@ -83,7 +83,8 @@ body{
   margin:0 auto;
   padding-left:max(16px, env(safe-area-inset-left, 0px));
   padding-right:max(16px, env(safe-area-inset-right, 0px));
-  padding-block:14px 40px;
+  padding-top:calc(14px + env(safe-area-inset-top, 0px));         /* App-Vollbild: unter Uhrzeit und Aussparung bleibt frei */
+  padding-bottom:calc(40px + env(safe-area-inset-bottom, 0px));   /* und über dem Home-Balken */
   display:flex;flex-direction:column;gap:14px;
 }
 header{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
