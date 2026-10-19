@@ -240,6 +240,7 @@ button:focus-visible,.knopf:focus-within{outline:3px solid #5b8bbd;outline-offse
   <div class="aktion">
     <button class="haupt" id="bStart">camera on</button>
     <label class="knopf haupt" id="lAufnahme" hidden>record video<input type="file" id="datei" accept="video/*" capture="user"></label>
+    <button id="bLeer" hidden>empty frame</button>
     <button class="haupt" id="bBelichten" hidden>expose</button>
     <button class="haupt" id="bWaessern" hidden>wash</button>
     <span class="uhr" id="uhr" hidden>0:00<small id="soll"></small></span>
@@ -253,6 +254,12 @@ button:focus-visible,.knopf:focus-within{outline:3px solid #5b8bbd;outline-offse
     <div class="segment" id="modus">
       <button id="mPortrait" data-m="portrait" aria-pressed="true">portrait</button>
       <button id="mFotogramm" data-m="fotogramm" aria-pressed="false">photogram</button>
+      <button id="mSchatten" data-m="schatten" aria-pressed="false">shadow</button>
+    </div>
+    <p class="titel" id="werTitel" hidden>shadow</p>
+    <div class="segment" id="wer" hidden>
+      <button data-w="person" aria-pressed="true">person</button>
+      <button data-w="dinge" aria-pressed="false">things</button>
     </div>
     <p class="titel">coating</p>
     <div class="segment" id="strich">
@@ -309,6 +316,17 @@ const prints = [];
 
 const mask = new Float32Array(N), dens = new Float32Array(N), grain = new Float32Array(N), expo = new Float32Array(N);
 const frontNoise = new Float32Array(W);
+let wer = 'person';            // Schatten: person · dinge
+
+// Schattenwurf: 1 = Licht kommt nicht durch, 0 = volles Licht
+const shadow = new Float32Array(N), raw = new Float32Array(N), tmp = new Float32Array(N), lamp = new Float32Array(N);
+let ref = null;            // Leerbild für den Modus „Dinge“
+let segmenter = null, segLaden = null, lastVT = -1, schattenDa = false;
+// Lampe sitzt an der Kamera: Mitte etwas heller, Ränder fallen leicht ab
+for (let y = 0, i = 0; y < H; y++) for (let x = 0; x < W; x++, i++) {
+  const dx = (x - W / 2) / (W * .62), dy = (y - H * .45) / (H * .62);
+  lamp[i] = .8 + .2 / (1 + dx * dx + dy * dy);
+}
 
 // ---------- Rauschen ----------
 function hash(x, y, s) {
@@ -426,7 +444,91 @@ function render() {
 }
 
 // ---------- Belichten ----------
+// ---------- Schattenwurf ----------
+const maskC = document.createElement('canvas'), mctx = maskC.getContext('2d');
+const SEG = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+const MODELL = 'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite';
+function ladeSegmenter() {
+  segLaden ||= (async () => {
+    const { FilesetResolver, ImageSegmenter } = await import(SEG + '/vision_bundle.mjs');
+    const vision = await FilesetResolver.forVisionTasks(SEG + '/wasm');
+    const opts = d => ({ baseOptions: { modelAssetPath: MODELL, delegate: d }, runningMode: 'VIDEO', outputCategoryMask: false, outputConfidenceMasks: true });
+    try { segmenter = await ImageSegmenter.createFromOptions(vision, opts('GPU')); }
+    catch { segmenter = await ImageSegmenter.createFromOptions(vision, opts('CPU')); }
+  })();
+  return segLaden;
+}
+// Quelle auf 4:5 beschnitten ins Raster zeichnen, Frontkamera gespiegelt
+const spiegeln = () => quelle === 'live' ? gespiegelt : facing === 'user';
+function cover(src, sw0, sh0) {
+  let sw = sw0, sh = sh0;
+  if (sw0 / sh0 > W / H) sw = sh0 * W / H; else sh = sw0 * H / W;
+  gctx.save(); if (spiegeln()) { gctx.translate(W, 0); gctx.scale(-1, 1); }
+  gctx.drawImage(src, (sw0 - sw) / 2, (sh0 - sh) / 2, sw, sh, 0, 0, W, H);
+  gctx.restore();
+  return gctx.getImageData(0, 0, W, H).data;
+}
+function boxBlur(a, b, r) {           // a → a, b als Zwischenspeicher
+  const n = 2 * r + 1;
+  for (let y = 0; y < H; y++) {
+    const o = y * W; let acc = 0;
+    for (let x = -r; x <= r; x++) acc += a[o + Math.min(W - 1, Math.max(0, x))];
+    for (let x = 0; x < W; x++) {
+      b[o + x] = acc / n;
+      acc += a[o + Math.min(W - 1, x + r + 1)] - a[o + Math.max(0, x - r)];
+    }
+  }
+  for (let x = 0; x < W; x++) {
+    let acc = 0;
+    for (let y = -r; y <= r; y++) acc += b[Math.min(H - 1, Math.max(0, y)) * W + x];
+    for (let y = 0; y < H; y++) {
+      a[y * W + x] = acc / n;
+      acc += b[Math.min(H - 1, y + r + 1) * W + x] - b[Math.max(0, y - r) * W + x];
+    }
+  }
+}
+function updateShadow() {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if (!vw || video.readyState < 2) return false;
+  if (wer === 'person') {
+    if (!segmenter) return false;
+    if (video.currentTime === lastVT) return false;
+    lastVT = video.currentTime;
+    const res = segmenter.segmentForVideo(video, performance.now());
+    const m = res.confidenceMasks?.[0];
+    if (!m) { res.close?.(); return false; }
+    const f = m.getAsFloat32Array(), mw = m.width, mh = m.height;
+    if (maskC.width !== mw || maskC.height !== mh) { maskC.width = mw; maskC.height = mh; }
+    const id = mctx.createImageData(mw, mh), q = id.data;
+    for (let i = 0, o = 0; i < f.length; i++, o += 4) { const v = f[i] * 255; q[o] = q[o + 1] = q[o + 2] = v; q[o + 3] = 255; }
+    res.close?.();
+    mctx.putImageData(id, 0, 0);
+    const d = cover(maskC, mw, mh);
+    for (let i = 0, o = 0; i < N; i++, o += 4) raw[i] = d[o] / 255;
+  } else {
+    if (!ref) return false;
+    const d = cover(video, vw, vh);
+    for (let i = 0, o = 0; i < N; i++, o += 4) {
+      const df = Math.max(Math.abs(d[o] - ref[o]), Math.abs(d[o + 1] - ref[o + 1]), Math.abs(d[o + 2] - ref[o + 2])) / 255;
+      let v = clamp((df - .07) / .13);
+      raw[i] = v * v * (3 - 2 * v);
+    }
+  }
+  // Halbschatten: die Lampe ist kein Punkt, die Kante franst leicht aus
+  shadow.set(raw);
+  boxBlur(shadow, tmp, 3); boxBlur(shadow, tmp, 3);
+  schattenDa = true;
+  return true;
+}
+
+function merkeLeer() { if (video.videoWidth) ref = Uint8ClampedArray.from(cover(video, video.videoWidth, video.videoHeight)); }
+
 function expose(rate) {
+  if (mode === 'schatten') {   // Kamera = Lampe: wo Schatten fällt, bleibt das Papier weiß
+    if (!schattenDa) return;
+    for (let i = 0; i < N; i++) expo[i] += (1 - shadow[i]) * lamp[i] * rate;
+    return;
+  }
   const vw = video.videoWidth, vh = video.videoHeight;
   if (!vw) return;
   let sw = vw, sh = vh;
@@ -458,7 +560,7 @@ function next(id) {
 }
 function fehler(t) { const f = $('fehler'); f.textContent = t || ''; f.hidden = !t; }
 function show(ids) {
-  for (const id of ['bStart', 'lAufnahme', 'bBelichten', 'bWaessern', 'bSichern', 'bNeu']) $(id).hidden = !ids.includes(id);
+  for (const id of ['bStart', 'lAufnahme', 'bLeer', 'bBelichten', 'bWaessern', 'bSichern', 'bNeu']) $(id).hidden = !ids.includes(id);
 }
 const dauer = () => (isFinite(video.duration) && video.duration > 0) ? video.duration : 10;
 function zielzeit() { return quelle === 'video' ? dauer() : T; }
@@ -466,6 +568,20 @@ function updateClock() {
   uhr.firstChild.nodeValue = fmt(elapsed);
   const z = zielzeit();
   soll.textContent = (state === 'ready' || state === 'exposing') && z ? '/ ' + fmt(z) : '';
+}
+// Bereit-Zustand: welcher Knopf ist dran? Im Schatten-Modus erst Leerbild (things) bzw. Personenerkennung (person)
+function readyHint() {
+  if (state !== 'ready') return;
+  const b = $('bBelichten'); b.disabled = false;
+  if (mode !== 'schatten') { show(['bBelichten']); next('bBelichten'); return; }
+  if (wer === 'dinge') {
+    if (quelle === 'video' && !ref && video.readyState >= 2) merkeLeer();   // Video: erstes Bild ist das leere Bild
+    show(quelle === 'live' ? ['bLeer', 'bBelichten'] : ['bBelichten']);
+    b.disabled = !ref; next(ref ? 'bBelichten' : 'bLeer');
+  } else {
+    show(['bBelichten']); b.disabled = !segmenter; next(segmenter ? 'bBelichten' : null);
+    if (!segmenter) ladeSegmenter().then(readyHint, () => fehler('shadow detection didn\'t load. try “things”.'));
+  }
 }
 function setState(s) {
   state = s;
@@ -479,7 +595,7 @@ function setState(s) {
     show(quelle === 'live' ? ['bStart'] : ['lAufnahme']);
     next(quelle === 'live' ? 'bStart' : 'lAufnahme');
   }
-  if (s === 'ready') { show(['bBelichten']); next('bBelichten'); }
+  if (s === 'ready') readyHint();
   if (s === 'exposing') { show(['bBelichten']); next(null); $('bBelichten').style.setProperty('--p', '0%'); }
   if (s === 'exposed') { show(['bWaessern']); next('bWaessern'); }
   const laedt = s === 'done';   // nach dem Waschen trocknet der Abzug noch: „save print“ lädt
@@ -524,7 +640,7 @@ async function startLive() {
       if (versuch) await new Promise(r => setTimeout(r, 400));   // iOS gibt die alte Kamera manchmal erst kurz danach frei
       const s = await holeKamera(facing);
       if (meins !== liveNr) { s.getTracks().forEach(t => t.stop()); return; }
-      stream = s; liveLief = true;
+      stream = s; liveLief = true; ref = null; schattenDa = false; lastVT = -1;
       const echt = s.getVideoTracks()[0]?.getSettings?.().facingMode;
       gespiegelt = echt ? echt === 'user' : facing === 'user';
       video.srcObject = s;
@@ -553,7 +669,7 @@ $('datei').addEventListener('change', async e => {
   hint.textContent = 'loading video …';
   try {
     await new Promise((ok, fail) => { video.onloadeddata = ok; video.onerror = fail; video.load(); });
-    video.currentTime = 0; video.pause();
+    video.currentTime = 0; video.pause(); ref = null; schattenDa = false; lastVT = -1;
     newSheet();
     setState('ready');
   } catch (_) {
@@ -687,6 +803,7 @@ function loop(now) {
   }
   if (state === 'washing') $('bWaessern').style.setProperty('--p', wash * 100 + '%');
   if (state === 'done' && $('bSichern').classList.contains('laedt')) $('bSichern').style.setProperty('--p', ox * 100 + '%');
+  if (mode === 'schatten' && (state === 'ready' || state === 'exposing') && video.readyState >= 2) updateShadow();
   if (dirty) { render(); dirty = false; }
   requestAnimationFrame(loop);
 }
@@ -724,7 +841,14 @@ segment('strich', d => {
 });
 segment('modus', d => {
   mode = d.m;
+  $('werTitel').hidden = $('wer').hidden = mode !== 'schatten';
+  readyHint();
 });
+segment('wer', d => {
+  wer = d.w; schattenDa = false; shadow.fill(0); lastVT = -1;
+  readyHint();
+});
+$('bLeer').onclick = () => { merkeLeer(); readyHint(); };
 
 addEventListener('keydown', e => {
   if (e.key === ' ') {
