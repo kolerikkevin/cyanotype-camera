@@ -302,6 +302,7 @@ const T = 30, staerke = 1;     // nur Sonne: 30 s bis volle Belichtung, Video = 
 let brush = false, resid = .03; // Unterlage mit Pinselstrichen
 let elapsed = 0, wash = 0, ox = 0, dirty = true, nr = 0;
 let stream = null, wakeLock = null, videoURL = null;
+let liveNr = 0, liveLief = false, gespiegelt = true;   // Umschalt-Zähler, lief live schon einmal, Bild spiegeln (Frontkamera)
 const prints = [];
 
 const mask = new Float32Array(N), dens = new Float32Array(N), grain = new Float32Array(N), expo = new Float32Array(N);
@@ -429,7 +430,7 @@ function expose(rate) {
   let sw = vw, sh = vh;
   if (vw / vh > W / H) sw = vh * W / H; else sh = vw * H / W;
   gctx.save();
-  if (facing === 'user') { gctx.translate(W, 0); gctx.scale(-1, 1); }
+  if (quelle === 'live' ? gespiegelt : facing === 'user') { gctx.translate(W, 0); gctx.scale(-1, 1); }
   gctx.drawImage(video, (vw - sw) / 2, (vh - sh) / 2, sw, sh, 0, 0, W, H);
   gctx.restore();
   const d = gctx.getImageData(0, 0, W, H).data, portrait = mode === 'portrait';
@@ -492,16 +493,46 @@ function aufVideoUmschalten(grund) {
   quelle = 'video';
   setState('idle');
 }
-async function startLive() {
-  try {
-    if (stream) stream.getTracks().forEach(t => t.stop());
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 960 } }, audio: false });
-    video.srcObject = stream;
-    await video.play();
-    if (state === 'idle') setState('ready');
-  } catch (e) {
-    aufVideoUmschalten('the live camera is blocked here. record a short video instead, it will expose the sheet.');
+// Kamera holen: erst exakt vorne/hinten, sonst über die Geräteliste (Name enthält „back“), zuletzt nur als Wunsch.
+async function holeKamera(f) {
+  const basis = { width: { ideal: 1280 }, height: { ideal: 960 } };
+  try { return await navigator.mediaDevices.getUserMedia({ video: { ...basis, facingMode: { exact: f } }, audio: false }); }
+  catch (e) {
+    if (e && (e.name === 'NotAllowedError' || e.name === 'SecurityError')) throw e;
+    const hinten = /back|rear|environment|rück/i;
+    const cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput' && d.label);
+    const cam = cams.find(d => f === 'environment' ? hinten.test(d.label) : !hinten.test(d.label));
+    if (cam) return await navigator.mediaDevices.getUserMedia({ video: { ...basis, deviceId: { exact: cam.deviceId } }, audio: false });
+    return await navigator.mediaDevices.getUserMedia({ video: { ...basis, facingMode: { ideal: f } }, audio: false });
   }
+}
+// Live starten oder umschalten. Jeder Aufruf bekommt eine Nummer; ein überholter (schnelles Hin- und Hertippen) räumt sich selbst weg.
+// Scheitert nur ein Umschalten, bleibt die Seite live (kurze Fehlermeldung) statt dauerhaft auf „record video“ zu fallen.
+async function startLive() {
+  const meins = ++liveNr;
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  video.srcObject = null;
+  for (let versuch = 0; versuch < 2; versuch++) {
+    try {
+      if (versuch) await new Promise(r => setTimeout(r, 400));   // iOS gibt die alte Kamera manchmal erst kurz danach frei
+      const s = await holeKamera(facing);
+      if (meins !== liveNr) { s.getTracks().forEach(t => t.stop()); return; }
+      stream = s; liveLief = true;
+      const echt = s.getVideoTracks()[0]?.getSettings?.().facingMode;
+      gespiegelt = echt ? echt === 'user' : facing === 'user';
+      video.srcObject = s;
+      try { await video.play(); } catch (e) { if (e.name !== 'AbortError') throw e; }
+      fehler('');
+      if (state === 'idle') setState('ready');
+      return;
+    } catch (e) {
+      if (meins !== liveNr) return;
+      if (e && (e.name === 'NotAllowedError' || e.name === 'SecurityError')) break;
+    }
+  }
+  if (meins !== liveNr) return;
+  if (!liveLief) aufVideoUmschalten();
+  else fehler('couldn\'t switch the camera. tap again.');
 }
 $('datei').addEventListener('change', async e => {
   const file = e.target.files && e.target.files[0];
@@ -676,7 +707,7 @@ function segment(id, cb) {
 segment('kamera', d => {
   facing = d.f;
   $('datei').setAttribute('capture', facing);
-  if (quelle === 'live' && stream && state !== 'washing') startLive();
+  if (quelle === 'live' && liveLief && state !== 'washing') startLive();
 });
 segment('strich', d => {
   brush = d.b === 'brush';
