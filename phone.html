@@ -218,18 +218,44 @@ button:focus-visible,.knopf:focus-within{outline:3px solid #5b8bbd;outline-offse
 .thema:hover{color:var(--tinte)!important}
 /* Nächster Schritt: genau ein Knopf leuchtet (Akzent + sanftes Pulsieren), alles andere bleibt zurückhaltend */
 .next{background:var(--next-bg)!important;border-color:var(--next-bg)!important;color:var(--next-text)!important;font-weight:600!important;animation:winken 2.4s ease-out infinite}
+/* Ladebalken wie Wasser: Füllung mit fließender Wellenkante (washing, drying), bei „exposing“ eine weiche Lichtkante */
+#bBelichten.laeuft,#bWaessern.laeuft,#bSichern.laedt{position:relative;overflow:hidden;isolation:isolate}
+#bBelichten.laeuft{cursor:pointer}
+#bWaessern.laeuft,#bSichern.laedt{cursor:progress;opacity:1!important}
+#bBelichten.laeuft::before,#bWaessern.laeuft::before,#bSichern.laedt::before,#bWaessern.laeuft::after,#bSichern.laedt::after{
+  content:'';position:absolute;left:0;top:-28px;bottom:-28px;width:var(--p,0%);z-index:-1;background:var(--fuellung);pointer-events:none}
+#bWaessern.laeuft::before,#bSichern.laedt::before{
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='28'%3E%3Cpath d='M0 0H7Q14 7 7 14Q0 21 7 28H0Z'/%3E%3C/svg%3E") right top/14px 28px repeat-y,linear-gradient(#000,#000) left top/calc(100% - 13px) 100% no-repeat;
+          mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='28'%3E%3Cpath d='M0 0H7Q14 7 7 14Q0 21 7 28H0Z'/%3E%3C/svg%3E") right top/14px 28px repeat-y,linear-gradient(#000,#000) left top/calc(100% - 13px) 100% no-repeat;
+  animation:welle 1.8s linear infinite}
+#bWaessern.laeuft::after,#bSichern.laedt::after{   /* zweite, hellere Welle versetzt: etwas Tiefe */
+  opacity:.45;width:calc(var(--p,0%) + 6px);
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='28'%3E%3Cpath d='M0 0H7Q14 7 7 14Q0 21 7 28H0Z'/%3E%3C/svg%3E") right top/14px 28px repeat-y,linear-gradient(#000,#000) left top/calc(100% - 13px) 100% no-repeat;
+          mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='28'%3E%3Cpath d='M0 0H7Q14 7 7 14Q0 21 7 28H0Z'/%3E%3C/svg%3E") right top/14px 28px repeat-y,linear-gradient(#000,#000) left top/calc(100% - 13px) 100% no-repeat;
+  animation:welle 2.6s linear infinite reverse}
+#bSichern.laedt::before{animation-duration:3.2s}   /* trocknen: ruhiger */
+#bSichern.laedt::after{animation-duration:4.4s}
+#bBelichten.laeuft::before{   /* Licht: weicher, leicht atmender Rand */
+  -webkit-mask:linear-gradient(90deg,#000 calc(100% - 22px),transparent);mask:linear-gradient(90deg,#000 calc(100% - 22px),transparent);
+  animation:atmen 2.4s ease-in-out infinite}
+@keyframes welle{to{-webkit-mask-position:right 28px,left top;mask-position:right 28px,left top}}
+@keyframes atmen{50%{opacity:.7}}
+.next{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='k'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23k)'/%3E%3C/svg%3E")!important}   /* ganz feines Papierkorn auf dem leuchtenden Knopf */
+@media (prefers-reduced-motion:reduce){#bBelichten.laeuft::before,#bWaessern.laeuft::before,#bSichern.laedt::before,#bWaessern.laeuft::after,#bSichern.laedt::after{animation:none}}
 /* Aufnehmen ist ein anderer Moment als die übrigen Schritte: dunkles Rot statt Blau */
 #lAufnahme.next{background:var(--rec-bg)!important;border-color:var(--rec-bg)!important;--next-glow:var(--rec-glow)}
 .aktion > #bNeu{flex:0 0 40%}   /* neben „save print“ gut sichtbar */
 .aktion > #bNeu.next{flex:1}   /* „new sheet“ allein: volle Breite */
 @keyframes winken{0%{box-shadow:0 0 0 0 var(--next-glow)}70%{box-shadow:0 0 0 10px rgba(0,0,0,0)}100%{box-shadow:0 0 0 0 rgba(0,0,0,0)}}
-#bSichern.laedt{background-image:linear-gradient(90deg,var(--fuellung) var(--p,0%),transparent var(--p,0%));cursor:progress;opacity:1!important}   /* Abzug trocknet noch: Balken lädt bis „save print“ geht */
-#bWaessern.laeuft{background-image:linear-gradient(90deg,var(--fuellung) var(--p,0%),transparent var(--p,0%));cursor:progress;opacity:1!important}   /* „washing“: Balken läuft, bis das Blatt gewaschen ist */
-#bBelichten.laeuft{background-image:linear-gradient(90deg,var(--fuellung) var(--p,0%),transparent var(--p,0%));cursor:pointer}   /* „exposing“ füllt sich wie ein Balken bis zur vollen Belichtung */
 .zweit{border-color:var(--zweit-rand)!important;color:var(--tinte)!important;font-weight:600!important}   /* echte Alternative zum leuchtenden Knopf, z. B. „new sheet“ neben „save print“ */
 .fehler{margin:0 0 14px;font-size:13px;color:var(--fehler)}
 .fehler[hidden]{display:none}
 @media (prefers-reduced-motion:reduce){.next{animation:none}}
+/* Hochkant fixiert: Dreht man das Handy quer, dreht die Seite gegen (iOS hat für Web-Apps keine echte Ausrichtungssperre).
+   So lassen sich verschiedene Perspektiven belichten, wie mit einer Kamera mit Ausrichtungssperre. */
+html.quer,html.quer body{overflow:hidden;height:100%}
+html.quer body{position:fixed;left:50%;top:50%;width:100vh;height:100vw;margin:0;transform:translate(-50%,-50%) rotate(var(--dreh,0deg));overflow-y:auto;-webkit-overflow-scrolling:touch}
+html.quer .app{padding-left:16px;padding-right:16px;padding-top:calc(14px + max(env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px)))}
 @media (prefers-reduced-motion:reduce){.abzug{animation:none}}
 </style>
 
@@ -327,7 +353,8 @@ const T = 30, staerke = 1;     // nur Sonne: 30 s bis volle Belichtung, Video = 
 let brush = false, resid = .03; // Unterlage mit Pinselstrichen
 let elapsed = 0, wash = 0, ox = 0, dirty = true, nr = 0;
 let stream = null, wakeLock = null, videoURL = null;
-let liveNr = 0, liveLief = false, gespiegelt = true;   // Umschalt-Zähler, lief live schon einmal, Bild spiegeln (Frontkamera)
+let liveNr = 0, liveLief = false, gespiegelt = true;
+let drehung = 0;   // Handy gedreht: 90 = gegen den Uhrzeigersinn, -90 = mit dem Uhrzeigersinn, 0 = hochkant   // Umschalt-Zähler, lief live schon einmal, Bild spiegeln (Frontkamera)
 const prints = [];
 let aktiv = null;   // der Abzug, der gerade auf dem Blatt liegt (frisch oder von der Leine zurückgeholt)
 
@@ -492,12 +519,22 @@ function ladeSegmenter() {
 // Quelle auf 4:5 beschnitten ins Raster zeichnen, Frontkamera gespiegelt
 const spiegeln = () => quelle === 'live' ? gespiegelt : facing === 'user';
 function cover(src, sw0, sh0) {
-  let sw = sw0, sh = sh0;
-  if (sw0 / sh0 > W / H) sw = sh0 * W / H; else sh = sw0 * H / W;
-  gctx.save(); if (spiegeln()) { gctx.translate(W, 0); gctx.scale(-1, 1); }
-  gctx.drawImage(src, (sw0 - sw) / 2, (sh0 - sh) / 2, sw, sh, 0, 0, W, H);
-  gctx.restore();
+  zeichne(src, sw0, sh0, spiegeln());
   return gctx.getImageData(0, 0, W, H).data;
+}
+// Kamerabild auf 4:5 beschnitten ins Raster. Hält man das Handy quer, liefert iOS das Bild aufrecht zur Schwerkraft;
+// es wird um die Handydrehung zurückgedreht, damit das Blatt sieht, was das Handy „sieht“ (wie hochkant fixiert).
+function zeichne(src, sw0, sh0, spiegel) {
+  const r = quelle === 'live' ? drehung : 0, quer = r !== 0;
+  const ew = quer ? sh0 : sw0, eh = quer ? sw0 : sh0;   // Maße nach dem Drehen
+  const k = (ew / eh > W / H) ? H / eh : W / ew;         // so groß, dass es das Raster füllt
+  gctx.save();
+  gctx.translate(W / 2, H / 2);
+  if (spiegel) gctx.scale(-1, 1);
+  gctx.rotate(r * Math.PI / 180);
+  gctx.scale(k, k);
+  gctx.drawImage(src, -sw0 / 2, -sh0 / 2, sw0, sh0);
+  gctx.restore();
 }
 function boxBlur(a, b, r) {           // a → a, b als Zwischenspeicher
   const n = 2 * r + 1;
@@ -562,12 +599,7 @@ function expose(rate) {
   }
   const vw = video.videoWidth, vh = video.videoHeight;
   if (!vw) return;
-  let sw = vw, sh = vh;
-  if (vw / vh > W / H) sw = vh * W / H; else sh = vw * H / W;
-  gctx.save();
-  if (quelle === 'live' ? gespiegelt : facing === 'user') { gctx.translate(W, 0); gctx.scale(-1, 1); }
-  gctx.drawImage(video, (vw - sw) / 2, (vh - sh) / 2, sw, sh, 0, 0, W, H);
-  gctx.restore();
+  zeichne(video, vw, vh, spiegeln());
   const d = gctx.getImageData(0, 0, W, H).data, portrait = mode === 'portrait';
   for (let i = 0, o = 0; i < N; i++, o += 4) {
     let L = (d[o] * .299 + d[o + 1] * .587 + d[o + 2] * .114) / 255;
@@ -616,7 +648,7 @@ function readyHint() {
 }
 function setState(s) {
   state = s;
-  uhr.hidden = !['ready', 'exposing', 'exposed', 'washing'].includes(s);   // Uhr steht von „expose“ bis „washing“ daneben (feste Breite), damit der Knopf nicht springt
+  uhr.hidden = !['ready', 'exposing', 'exposed'].includes(s);   // Uhr steht von „expose“ bis „washing“ daneben (feste Breite), damit der Knopf nicht springt
   $('bBelichten').textContent = s === 'exposing' ? 'exposing' : 'expose';
   $('bBelichten').classList.toggle('laeuft', s === 'exposing');
   $('bWaessern').textContent = s === 'washing' ? 'washing' : 'wash';
@@ -632,7 +664,7 @@ function setState(s) {
   const laedt = s === 'done';   // nach dem Waschen trocknet der Abzug noch: „save print“ lädt
   $('bSichern').classList.toggle('laedt', laedt); $('bSichern').disabled = laedt;
   $('bSichern').textContent = laedt ? 'drying' : 'save print';   // erst trocknen, dann sichern   // wird frei, sobald der Abzug fertig ist
-  if (s === 'washing') { show(['bWaessern']); next(null); $('bWaessern').style.setProperty('--p', '0%'); }
+  if (s === 'washing') { show(['bWaessern', 'bNeu']); next(null); $('bWaessern').style.setProperty('--p', '0%'); }   // „das war nichts“: gleich ein neues Blatt
   if (s === 'done') $('bSichern').style.setProperty('--p', '0%');
   if (s === 'done') { show(['bSichern', 'bNeu']); next(null); }   // „save print“ lädt noch, leuchtet sobald der Abzug fertig ist
   updateClock();
@@ -916,6 +948,18 @@ addEventListener('keydown', e => {
     if (state === 'ready') startExposure(); else if (state === 'exposing') stopExposure(); else if (state === 'exposed') startWash();
   }
 });
+
+// ---------- Hochkant fixieren ----------
+function ausrichtung() {
+  let a = typeof window.orientation === 'number' ? window.orientation
+        : (screen.orientation && typeof screen.orientation.angle === 'number' ? (screen.orientation.angle === 270 ? -90 : screen.orientation.angle) : 0);
+  drehung = (a === 90 || a === -90) && matchMedia('(pointer: coarse)').matches ? a : 0;
+  document.documentElement.classList.toggle('quer', drehung !== 0);
+  document.documentElement.style.setProperty('--dreh', (-drehung) + 'deg');
+}
+addEventListener('orientationchange', () => setTimeout(ausrichtung, 50));
+addEventListener('resize', ausrichtung);
+ausrichtung();
 
 if (!liveMoeglich()) quelle = 'video';
 newSheet();

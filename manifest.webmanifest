@@ -4,6 +4,7 @@
   "start_url": "phone.html",
   "scope": "./",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#14181b",
   "theme_color": "#14181b",
   "icons": [
