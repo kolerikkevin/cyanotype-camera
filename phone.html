@@ -253,15 +253,23 @@ button:focus-visible,.knopf:focus-within{outline:3px solid #5b8bbd;outline-offse
 @media (prefers-reduced-motion:reduce){.next{animation:none}}
 .version{font-size:11px;opacity:.45;margin-top:10px}
 @media (prefers-reduced-motion:reduce){.abzug{animation:none}}
-/* Querformat (Handy gekippt): Blatt links in voller Höhe, Bedienung rechts als Spalte, drying line und about darunter. */
+/* Querformat (Handy gekippt): Blatt links fast in voller Höhe, Titel und Bedienung rechts als Spalte, drying line und about darunter. */
 @media (orientation: landscape) and (pointer: coarse) and (max-height: 560px) {
-  body .app{max-width:none;display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-areas:"kopf kopf" "blatt bedienung" "leine leine" "about about";column-gap:22px;row-gap:12px;align-items:start;
-       padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-top:10px}
-  body header{grid-area:kopf}
+  body .app{max-width:none;display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-areas:"blatt kopf" "blatt bedienung" "leine leine" "about about";grid-template-rows:auto 1fr;column-gap:18px;row-gap:8px;align-items:start;
+       padding-left:max(12px, env(safe-area-inset-left, 0px));padding-right:max(12px, env(safe-area-inset-right, 0px));padding-top:8px}
+  body header{grid-area:kopf;margin:0;padding-top:8px}
+  body h1{font-size:22px}
   body .buehne{grid-area:blatt;align-self:start}
-  body .blatt{width:calc((100vh - 76px) * .8);max-width:none;transform:rotate(.3deg)}
-  body .bedienung{grid-area:bedienung;display:flex;flex-direction:column;gap:10px;min-width:0}
-  .bedienung .aktion{order:-1}   /* der leuchtende Schritt ganz oben rechts, daumennah */
+  body .blatt{width:calc((100vh - 32px) * .8);max-width:none;transform:rotate(.3deg)}
+  body .bedienung{grid-area:bedienung;display:flex;flex-direction:column;gap:7px;min-width:0}
+  body .bedienung .aktion{order:-1;gap:7px}   /* der leuchtende Schritt ganz oben rechts, daumennah */
+  /* Knöpfe kompakter als hochkant */
+  body .bedienung button,body .bedienung .knopf{font-size:14px;padding:9px 10px;min-height:38px}
+  body .bedienung .segment button{min-height:32px;padding:6px 4px;font-size:13px}
+  body .bedienung .regler{gap:6px 8px}
+  body .bedienung .regler .titel{font-size:12px}
+  body .bedienung .uhr{font-size:15px;flex-basis:5.6em!important}
+  body .bedienung .fehler{font-size:12px;margin:0}
   body .leine-sektion{grid-area:leine;margin-top:4px}
   body .about{grid-area:about}
 }
@@ -328,7 +336,7 @@ button:focus-visible,.knopf:focus-within{outline:3px solid #5b8bbd;outline-offse
   <footer class="about">
     <p class="about-titel">about</p>
     <p>more of what i make: <a href="https://www.instagram.com/grobmotorikkevin/" target="_blank" rel="noopener">@grobmotorikkevin</a> on instagram</p>
-    <p class="version">v 20.10. 12:54</p>
+    <p class="version">v 20.10. 13:01</p>
   </footer>
 </div>
 
