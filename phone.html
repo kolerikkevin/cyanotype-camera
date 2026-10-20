@@ -253,9 +253,13 @@ button:focus-visible,.knopf:focus-within{outline:3px solid #5b8bbd;outline-offse
 @media (prefers-reduced-motion:reduce){.next{animation:none}}
 /* Hochkant fixiert: Dreht man das Handy quer, dreht die Seite gegen (iOS hat für Web-Apps keine echte Ausrichtungssperre).
    So lassen sich verschiedene Perspektiven belichten, wie mit einer Kamera mit Ausrichtungssperre. */
-html.quer,html.quer body{overflow:hidden;height:100%}
-html.quer body{position:fixed;left:50%;top:50%;width:100vh;height:100vw;margin:0;transform:translate(-50%,-50%) rotate(var(--dreh,0deg));overflow-y:auto;-webkit-overflow-scrolling:touch}
-html.quer .app{padding-left:16px;padding-right:16px;padding-top:calc(14px + max(env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px)))}
+/* Greift allein über das Querformat (CSS), unabhängig vom Skript. Drehrichtung aus --dreh (Skript), sonst die häufigste: Handy gegen den Uhrzeigersinn gedreht. */
+@media (orientation: landscape) and (pointer: coarse) and (max-height: 560px) {
+  html,body{overflow:hidden;height:100%}
+  body{position:fixed;left:50%;top:50%;width:100vh;height:100vw;margin:0;transform:translate(-50%,-50%) rotate(var(--dreh,-90deg));overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .app{padding-left:16px;padding-right:16px;padding-top:calc(14px + max(env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px)))}
+}
+.version{font-size:11px;opacity:.45;margin-top:10px}
 @media (prefers-reduced-motion:reduce){.abzug{animation:none}}
 </style>
 
@@ -318,6 +322,7 @@ html.quer .app{padding-left:16px;padding-right:16px;padding-top:calc(14px + max(
   <footer class="about">
     <p class="about-titel">about</p>
     <p>more of what i make: <a href="https://www.instagram.com/grobmotorikkevin/" target="_blank" rel="noopener">@grobmotorikkevin</a> on instagram</p>
+    <p class="version">v 20.10. 12:38</p>
   </footer>
 </div>
 
@@ -950,13 +955,17 @@ addEventListener('keydown', e => {
 });
 
 // ---------- Hochkant fixieren ----------
+const querMQ = matchMedia('(orientation: landscape) and (pointer: coarse) and (max-height: 560px)');
 function ausrichtung() {
-  let a = typeof window.orientation === 'number' ? window.orientation
-        : (screen.orientation && typeof screen.orientation.angle === 'number' ? (screen.orientation.angle === 270 ? -90 : screen.orientation.angle) : 0);
-  drehung = (a === 90 || a === -90) && matchMedia('(pointer: coarse)').matches ? a : 0;
-  document.documentElement.classList.toggle('quer', drehung !== 0);
+  if (!querMQ.matches) { drehung = 0; document.documentElement.style.removeProperty('--dreh'); return; }
+  // Richtung: window.orientation (90 / -90), sonst screen.orientation (90 / 270), sonst die häufigste (gegen den Uhrzeigersinn)
+  let a = typeof window.orientation === 'number' ? window.orientation : NaN;
+  if (a !== 90 && a !== -90 && screen.orientation && typeof screen.orientation.angle === 'number') a = screen.orientation.angle === 270 ? -90 : screen.orientation.angle;
+  drehung = a === -90 ? -90 : 90;
   document.documentElement.style.setProperty('--dreh', (-drehung) + 'deg');
 }
+querMQ.addEventListener?.('change', ausrichtung);
+screen.orientation?.addEventListener?.('change', ausrichtung);
 addEventListener('orientationchange', () => setTimeout(ausrichtung, 50));
 addEventListener('resize', ausrichtung);
 ausrichtung();
