@@ -89,6 +89,7 @@ body{
   --zeile:12px;   /* Abstand zwischen allen Bedienzeilen (camera, expose, image, coating) */
 }
 header{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.unter{margin:8px 0 0;font-size:14px;color:var(--tinte-2)}
 h1{
   font-family:var(--hand);font-weight:400;font-size:27px;line-height:1;margin:0;
   transform:rotate(-1.2deg);transform-origin:left;
@@ -279,7 +280,7 @@ button:focus-visible,.knopf:focus-within{outline:3px solid #5b8bbd;outline-offse
 
 <div class="app">
   <header>
-    <h1>cyanotype camera</h1>
+    <div><h1>cyanotype camera</h1><p class="unter">a camera that imitates cyanotype prints.</p></div>
     <button class="thema" id="thema" type="button">dark</button>
   </header>
 
@@ -313,8 +314,8 @@ button:focus-visible,.knopf:focus-within{outline:3px solid #5b8bbd;outline-offse
   <div class="regler">
     <p class="titel">image</p>
     <div class="segment" id="modus">
-      <button id="mPortrait" data-m="portrait" aria-pressed="true">portrait</button>
-      <button id="mFotogramm" data-m="fotogramm" aria-pressed="false">negative</button>
+      <button id="mFotogramm" data-m="fotogramm" aria-pressed="true">negative</button>
+      <button id="mPortrait" data-m="portrait" aria-pressed="false">portrait</button>
       <button id="mSchatten" data-m="schatten" aria-pressed="false">shadow</button>
     </div>
     <p class="titel" id="werTitel" hidden>shadow</p>
@@ -337,8 +338,11 @@ button:focus-visible,.knopf:focus-within{outline:3px solid #5b8bbd;outline-offse
 
   <footer class="about">
     <p class="about-titel">about</p>
-    <p>more of what i make: <a href="https://www.instagram.com/grobmotorikkevin/" target="_blank" rel="noopener">@grobmotorikkevin</a> on instagram</p>
-    <p class="version">v 20.10. 13:04</p>
+    <p>a cyanotype needs chemicals, sunlight and patience. it’s getting winter here, so i have none of that right now. so i built a camera that imitates it.</p>
+    <p>i think it's a cool quick way to explore, whats possible. find a motif, hit expose, hold still or move around a bit, then "wash" it. it takes a couple of tries, because you’re basically shooting blind, which i think is part of the fun.</p>
+    <p>everything runs in your browser. i built it with the help of claude; the idea, the design and the font are mine. i recommend to use it on your phone because theres more to explore.</p>
+    <p>kevin, munich. more of what i make: <a href="https://www.instagram.com/grobmotorikkevin/" target="_blank" rel="noopener">@grobmotorikkevin</a> on instagram</p>
+    <p class="version">v 27.10. 07:36</p>
   </footer>
 </div>
 
@@ -369,7 +373,7 @@ const dlP = (window.claude && window.claude.use) ? window.claude.use('downloads'
 // Zustand
 let quelle = 'live';          // live · video (aufgenommenes Video)
 let state = 'idle';           // idle · ready · exposing · washing · done
-let facing = 'user', mode = 'portrait';
+let facing = 'user', mode = 'fotogramm';   // negative ist Voreinstellung
 const T = 30, staerke = 1;     // nur Sonne: 30 s bis volle Belichtung, Video = 1 × Länge
 let brush = false, resid = .03; // Unterlage mit Pinselstrichen
 let elapsed = 0, wash = 0, ox = 0, dirty = true, nr = 0;
